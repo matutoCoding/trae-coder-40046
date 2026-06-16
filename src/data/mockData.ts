@@ -177,16 +177,22 @@ export function generateDeodorizationRecords(): DeodorizationRecord[] {
 export function generateTransportManifests(): TransportManifest[] {
   const units = ['建材公司', '焚烧发电厂', '水泥厂', '砖厂']
   const statuses: TransportManifest['status'][] = ['pending', 'approved', 'shipped']
-  return Array.from({ length: 12 }, (_, i) => ({
-    id: genId() + 'tr' + i,
-    manifestNo: `LD-${new Date(randomDate(20)).toISOString().slice(0, 10).replace(/-/g, '')}-${String(i + 1).padStart(3, '0')}`,
-    receivingUnit: units[i % units.length],
-    plateNumber: plates[i % plates.length],
-    drySludgeWeight: Math.round((8 + Math.random() * 12) * 10) / 10,
-    status: statuses[i % statuses.length],
-    operator: operators[i % operators.length],
-    createTime: randomDate(20),
-  }))
+  return Array.from({ length: 12 }, (_, i) => {
+    const createT = randomDate(20)
+    const status = statuses[i % statuses.length]
+    const shippedT = status === 'shipped' ? new Date(new Date(createT).getTime() + 86400000 * (Math.random() < 0.3 ? 1 : 0)).toISOString() : undefined
+    return {
+      id: genId() + 'tr' + i,
+      manifestNo: `LD-${new Date(createT).toISOString().slice(0, 10).replace(/-/g, '')}-${String(i + 1).padStart(3, '0')}`,
+      receivingUnit: units[i % units.length],
+      plateNumber: plates[i % plates.length],
+      drySludgeWeight: Math.round((8 + Math.random() * 12) * 10) / 10,
+      status,
+      operator: operators[i % operators.length],
+      createTime: createT,
+      shippedTime: shippedT,
+    }
+  })
 }
 
 export function generateDailyStatistics(): DailyStatistics[] {

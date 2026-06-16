@@ -107,6 +107,7 @@ export interface TransportManifest {
   status: 'pending' | 'approved' | 'shipped'
   operator: string
   createTime: string
+  shippedTime?: string
 }
 
 export interface DailyStatistics {

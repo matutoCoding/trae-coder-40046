@@ -50,7 +50,7 @@ export default function Dashboard() {
   const today = new Date().toISOString().slice(0, 10)
   const todayStats = dailyStatistics[dailyStatistics.length - 1]
   const todayWeighing = weighingRecords.filter((r) => r.weighTime.slice(0, 10) === today)
-  const todayTransport = transportManifests.filter((r) => r.status === 'shipped' && r.createTime.slice(0, 10) === today)
+  const todayTransport = transportManifests.filter((r) => r.status === 'shipped' && r.shippedTime && r.shippedTime.slice(0, 10) === today)
 
   const intakeToday = todayWeighing.reduce((s, r) => s + r.netWeight, 0)
   const outputToday = todayTransport.reduce((s, r) => s + r.drySludgeWeight, 0)

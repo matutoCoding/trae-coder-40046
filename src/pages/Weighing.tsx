@@ -48,6 +48,7 @@ export default function Weighing() {
     if (!formPlate || !formGross || !formTare || netWeight <= 0) return;
     const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     addWeighingRecord({
+      id: newId,
       plateNumber: formPlate,
       grossWeight: Number(formGross),
       tareWeight: Number(formTare),
@@ -166,7 +167,9 @@ export default function Weighing() {
     </div>
   );
 
-  const renderMoisture = () => (
+  const renderMoisture = () => {
+    const selectedRecord = weighingRecords.find((r) => r.id === testWeighingId);
+    return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="card">
         <div className="card-header flex items-center gap-2">
@@ -174,6 +177,25 @@ export default function Weighing() {
           含水率检测
         </div>
         <div className="card-body space-y-4">
+          {selectedRecord && (
+            <div className="p-3 rounded-lg bg-primary-50 border border-primary-200">
+              <div className="text-xs font-medium text-primary-700 mb-2">已关联过磅记录</div>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-xs text-slate-500">车牌号</div>
+                  <div className="font-bold text-slate-800">{selectedRecord.plateNumber}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">净重</div>
+                  <div className="font-bold text-slate-800">{selectedRecord.netWeight.toFixed(2)}吨</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">来源</div>
+                  <div className="font-bold text-slate-800 text-xs">{selectedRecord.sourceUnit}</div>
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <label className="stat-label">样品编号</label>
             <input className="input-field w-full bg-gray-100" value={testSampleId} readOnly />
@@ -241,6 +263,7 @@ export default function Weighing() {
       </div>
     </div>
   );
+  };
 
   const renderRecords = () => (
     <div className="card">

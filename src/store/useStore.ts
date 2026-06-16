@@ -48,7 +48,7 @@ interface SludgeStore {
   uploadTasks: UploadTask[]
   tempCurveData: { time: string; inlet: number; outlet: number; drum: number }[]
 
-  addWeighingRecord: (record: Omit<WeighingRecord, 'id'>) => void
+  addWeighingRecord: (record: Omit<WeighingRecord, 'id'> & { id?: string }) => void
   addMoistureTest: (test: Omit<MoistureTest, 'id'>) => void
   addTurnRecord: (record: Omit<TurnRecord, 'id'>) => void
   addConditioningRecord: (record: Omit<ConditioningRecord, 'id'>) => void
@@ -66,30 +66,37 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 }
 
-const initialWeighing = generateWeighingRecords()
-const initialMoisture = generateMoistureTests(initialWeighing)
-const initialSheds = generateStorageSheds()
+const STORAGE_KEY = 'sludge-management-store-v2'
+
+function getInitialState() {
+  const initialWeighing = generateWeighingRecords()
+  const initialMoisture = generateMoistureTests(initialWeighing)
+  const initialSheds = generateStorageSheds()
+  return {
+    weighingRecords: initialWeighing,
+    moistureTests: initialMoisture,
+    storageSheds: initialSheds,
+    turnRecords: generateTurnRecords(initialSheds),
+    conditioningRecords: generateConditioningRecords(),
+    filterPressRecords: generateFilterPressRecords(),
+    thermalDryingRecords: generateThermalDryingRecords(),
+    lowTempDryingRecords: generateLowTempDryingRecords(),
+    deodorizationRecords: generateDeodorizationRecords(),
+    transportManifests: generateTransportManifests(),
+    dailyStatistics: generateDailyStatistics(),
+    alerts: generateAlerts(),
+    uploadTasks: generateUploadTasks(),
+    tempCurveData: generateTempCurveData(),
+  }
+}
 
 export const useStore = create<SludgeStore>()(
   persist(
     (set) => ({
-      weighingRecords: initialWeighing,
-      moistureTests: initialMoisture,
-      storageSheds: initialSheds,
-      turnRecords: generateTurnRecords(initialSheds),
-      conditioningRecords: generateConditioningRecords(),
-      filterPressRecords: generateFilterPressRecords(),
-      thermalDryingRecords: generateThermalDryingRecords(),
-      lowTempDryingRecords: generateLowTempDryingRecords(),
-      deodorizationRecords: generateDeodorizationRecords(),
-      transportManifests: generateTransportManifests(),
-      dailyStatistics: generateDailyStatistics(),
-      alerts: generateAlerts(),
-      uploadTasks: generateUploadTasks(),
-      tempCurveData: generateTempCurveData(),
+      ...getInitialState(),
 
       addWeighingRecord: (record) =>
-        set((s) => ({ weighingRecords: [{ ...record, id: genId() }, ...s.weighingRecords] })),
+        set((s) => ({ weighingRecords: [{ ...record, id: record.id || genId() }, ...s.weighingRecords] })),
 
       addMoistureTest: (test) =>
         set((s) => ({ moistureTests: [{ ...test, id: genId() }, ...s.moistureTests] })),
@@ -118,7 +125,9 @@ export const useStore = create<SludgeStore>()(
       updateManifestStatus: (id, status) =>
         set((s) => ({
           transportManifests: s.transportManifests.map((m) =>
-            m.id === id ? { ...m, status } : m
+            m.id === id
+              ? { ...m, status, shippedTime: status === 'shipped' ? (m.shippedTime || new Date().toISOString()) : m.shippedTime }
+              : m
           ),
         })),
 
@@ -137,7 +146,7 @@ export const useStore = create<SludgeStore>()(
         })),
     }),
     {
-      name: 'sludge-management-store',
+      name: STORAGE_KEY,
       partialize: (state) => ({
         weighingRecords: state.weighingRecords,
         moistureTests: state.moistureTests,
@@ -151,6 +160,11 @@ export const useStore = create<SludgeStore>()(
         transportManifests: state.transportManifests,
         uploadTasks: state.uploadTasks,
       }),
+      merge: (persistedState, currentState) => {
+        if (!persistedState || typeof persistedState !== 'object') return currentState
+        const merged = { ...currentState, ...persistedState } as SludgeStore
+        return merged
+      },
     }
   )
 )
