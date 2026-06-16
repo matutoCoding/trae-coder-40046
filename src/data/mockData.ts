@@ -225,13 +225,40 @@ export function generateAlerts(): AlertItem[] {
 }
 
 export function generateUploadTasks(): UploadTask[] {
-  return [
-    { id: 'u1', taskName: '2026年6月进泥数据', dataType: '进泥过磅', status: 'uploaded', uploadTime: new Date().toISOString(), dataSize: '2.3MB' },
-    { id: 'u2', taskName: '2026年6月处置数据', dataType: '处置统计', status: 'pending', uploadTime: '', dataSize: '1.8MB' },
-    { id: 'u3', taskName: '2026年5月外运联单', dataType: '出泥外运', status: 'uploaded', uploadTime: new Date(Date.now() - 86400000).toISOString(), dataSize: '1.2MB' },
-    { id: 'u4', taskName: '2026年5月含水率报告', dataType: '检测数据', status: 'failed', uploadTime: new Date(Date.now() - 172800000).toISOString(), dataSize: '3.1MB' },
-    { id: 'u5', taskName: '2026年6月热干化温度', dataType: '运行数据', status: 'pending', uploadTime: '', dataSize: '4.5MB' },
+  const types = [
+    { dataType: '进泥过磅', size: '2.3MB' },
+    { dataType: '处置统计', size: '1.8MB' },
+    { dataType: '出泥外运', size: '1.2MB' },
+    { dataType: '检测数据', size: '3.1MB' },
+    { dataType: '运行数据', size: '4.5MB' },
   ]
+  const months = ['2026-02', '2026-03', '2026-04', '2026-05', '2026-06']
+  const tasks: UploadTask[] = []
+  let idx = 1
+  for (const month of months) {
+    for (const t of types) {
+      const isCurrent = month === '2026-06'
+      const isPrev = month === '2026-05'
+      const status: UploadTask['status'] = isCurrent ? (idx % 3 === 0 ? 'pending' : (idx % 3 === 1 ? 'uploaded' : 'failed'))
+        : isPrev ? (idx % 2 === 0 ? 'uploaded' : 'pending')
+        : 'uploaded'
+      const uploadTime = status === 'uploaded'
+        ? new Date(new Date(month + '-15').getTime() + idx * 3600000).toISOString()
+        : (status === 'failed' ? new Date(new Date(month + '-20').getTime()).toISOString() : '')
+      const [y, m] = month.split('-')
+      tasks.push({
+        id: 'u' + idx,
+        taskName: `${y}年${parseInt(m, 10)}月${t.dataType}`,
+        dataType: t.dataType,
+        status,
+        uploadTime,
+        dataSize: t.size,
+        month,
+      })
+      idx++
+    }
+  }
+  return tasks
 }
 
 export function generateTempCurveData() {

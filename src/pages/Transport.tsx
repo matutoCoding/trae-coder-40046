@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Truck, FileText, Plus, Search, Check, Send } from 'lucide-react'
+import { Truck, FileText, Plus, Search, Check, Send, ChevronDown, ChevronUp, Calendar, User, Clock, CheckCircle2 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { cn } from '@/lib/utils'
+import type { TransportManifest } from '@/types'
 
 const receivingUnits = ['建材公司', '焚烧发电厂', '水泥厂', '砖厂']
 const plateNumbers = ['苏B·12345', '苏B·23456', '苏B·34567', '苏B·45678', '苏B·56789']
@@ -21,9 +22,48 @@ function generateManifestNo() {
   return `LD-${date}-${seq}`
 }
 
+function fmtTime(t?: string) {
+  if (!t) return '-'
+  return new Date(t).toLocaleString('zh-CN')
+}
+
+function Timeline({ manifest }: { manifest: TransportManifest }) {
+  const steps = [
+    { key: 'create', label: '创建联单', time: manifest.createTime, icon: <FileText className="w-3.5 h-3.5" />, done: true },
+    { key: 'approve', label: '审批通过', time: manifest.approvedTime, icon: <Check className="w-3.5 h-3.5" />, done: manifest.status !== 'pending' },
+    { key: 'ship', label: '确认外运', time: manifest.shippedTime, icon: <Truck className="w-3.5 h-3.5" />, done: manifest.status === 'shipped' },
+  ]
+  return (
+    <div className="pt-3 border-t border-slate-100 space-y-2">
+      <p className="text-xs font-medium text-slate-500">流转时间线</p>
+      <ol className="relative border-l border-slate-200 ml-1.5 space-y-2.5 pl-4">
+        {steps.map((s) => (
+          <li key={s.key} className="relative">
+            <div className={cn(
+              'absolute -left-[22px] top-0.5 w-6 h-6 rounded-full flex items-center justify-center',
+              s.done ? 'bg-primary-600 text-white' : 'bg-slate-200 text-slate-400'
+            )}>
+              {s.icon}
+            </div>
+            <div className="flex items-center justify-between">
+              <p className={cn('text-xs font-medium', s.done ? 'text-slate-800' : 'text-slate-400')}>
+                {s.label}
+                {s.done && <CheckCircle2 className="w-3 h-3 inline ml-1 text-emerald-500" />}
+              </p>
+              <p className="text-[10px] text-slate-400 font-mono">{fmtTime(s.time)}</p>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">操作员: {manifest.operator}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 export default function Transport() {
   const { transportManifests, addTransportManifest, updateManifestStatus } = useStore()
   const [activeTab, setActiveTab] = useState<'manifest' | 'records'>('manifest')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [receivingUnit, setReceivingUnit] = useState(receivingUnits[0])
   const [plateNumber, setPlateNumber] = useState(plateNumbers[0])
@@ -49,14 +89,16 @@ export default function Transport() {
     setOperator('')
   }
 
-  const shippedRecords = transportManifests.filter((m) => m.status === 'shipped')
+  const shippedRecords = transportManifests.filter((m) => m.status === 'shipped' && m.shippedTime)
 
   const filteredShipped = shippedRecords.filter((m) => {
+    if (!m.shippedTime) return false
+    const day = m.shippedTime.slice(0, 10)
     if (searchUnit && !m.receivingUnit.includes(searchUnit)) return false
-    if (dateFrom && m.createTime.slice(0, 10) < dateFrom) return false
-    if (dateTo && m.createTime.slice(0, 10) > dateTo) return false
+    if (dateFrom && day < dateFrom) return false
+    if (dateTo && day > dateTo) return false
     return true
-  })
+  }).sort((a, b) => (b.shippedTime || '').localeCompare(a.shippedTime || ''))
 
   const totalWeight = filteredShipped.reduce((s, m) => s + m.drySludgeWeight, 0)
 
@@ -162,12 +204,21 @@ export default function Transport() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {transportManifests.map((m) => {
               const cfg = statusConfig[m.status]
+              const expanded = expandedId === m.id
               return (
                 <div key={m.id} className="card">
                   <div className="card-body space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={() => setExpandedId(expanded ? null : m.id)}
+                    >
                       <span className="text-sm font-bold text-slate-800">{m.manifestNo}</span>
-                      <span className={cfg.badge}>{cfg.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={cfg.badge}>{cfg.label}</span>
+                        {expanded
+                          ? <ChevronUp className="w-4 h-4 text-slate-400" />
+                          : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
                       <div>接收单位: <span className="font-medium text-slate-800">{m.receivingUnit}</span></div>
@@ -175,9 +226,13 @@ export default function Transport() {
                       <div>干泥重量: <span className="font-medium text-slate-800">{m.drySludgeWeight} 吨</span></div>
                       <div>操作员: <span className="font-medium text-slate-800">{m.operator}</span></div>
                     </div>
-                    <div className="text-[10px] text-slate-400">
-                      {new Date(m.createTime).toLocaleString('zh-CN')}
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      创建: {fmtTime(m.createTime)}
                     </div>
+
+                    {expanded && <Timeline manifest={m} />}
+
                     <div className="flex gap-2 pt-1">
                       {m.status === 'pending' && (
                         <button
@@ -200,7 +255,7 @@ export default function Transport() {
                       {m.status === 'shipped' && (
                         <span className="text-xs text-emerald-600 flex items-center gap-1">
                           <Check className="w-3 h-3" />
-                          已完成
+                          已完成 · 外运时间 {fmtTime(m.shippedTime)}
                         </span>
                       )}
                     </div>
@@ -230,8 +285,12 @@ export default function Transport() {
           </div>
 
           <div className="card">
-            <div className="card-header">
-              <h3 className="text-sm font-semibold text-slate-700">外运记录查询</h3>
+            <div className="card-header flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700">外运记录查询（按外运日期）</h3>
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                按确认外运时间归档
+              </span>
             </div>
             <div className="card-body">
               <div className="flex flex-wrap gap-3 mb-4">
@@ -268,7 +327,7 @@ export default function Transport() {
                       <th className="table-header text-left">接收单位</th>
                       <th className="table-header text-left">车牌号</th>
                       <th className="table-header text-right">干泥重量(吨)</th>
-                      <th className="table-header text-left">创建时间</th>
+                      <th className="table-header text-left">外运时间</th>
                       <th className="table-header text-left">操作员</th>
                     </tr>
                   </thead>
@@ -279,8 +338,8 @@ export default function Transport() {
                         <td className="table-cell">{m.receivingUnit}</td>
                         <td className="table-cell">{m.plateNumber}</td>
                         <td className="table-cell text-right font-medium">{m.drySludgeWeight}</td>
-                        <td className="table-cell text-slate-500">
-                          {new Date(m.createTime).toLocaleString('zh-CN')}
+                        <td className="table-cell text-slate-600">
+                          {fmtTime(m.shippedTime)}
                         </td>
                         <td className="table-cell">{m.operator}</td>
                       </tr>

@@ -107,6 +107,7 @@ export interface TransportManifest {
   status: 'pending' | 'approved' | 'shipped'
   operator: string
   createTime: string
+  approvedTime?: string
   shippedTime?: string
 }
 
@@ -136,4 +137,5 @@ export interface UploadTask {
   status: 'pending' | 'uploaded' | 'failed'
   uploadTime: string
   dataSize: string
+  month: string
 }

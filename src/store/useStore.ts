@@ -126,7 +126,12 @@ export const useStore = create<SludgeStore>()(
         set((s) => ({
           transportManifests: s.transportManifests.map((m) =>
             m.id === id
-              ? { ...m, status, shippedTime: status === 'shipped' ? (m.shippedTime || new Date().toISOString()) : m.shippedTime }
+              ? {
+                  ...m,
+                  status,
+                  approvedTime: status === 'approved' ? (m.approvedTime || new Date().toISOString()) : m.approvedTime,
+                  shippedTime: status === 'shipped' ? (m.shippedTime || new Date().toISOString()) : m.shippedTime,
+                }
               : m
           ),
         })),
