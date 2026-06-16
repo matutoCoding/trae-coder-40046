@@ -1,361 +1,512 @@
-import { useState } from 'react'
-import { Truck, FileText, Plus, Search, Check, Send, ChevronDown, ChevronUp, Calendar, User, Clock, CheckCircle2 } from 'lucide-react'
-import { useStore } from '@/store/useStore'
-import { cn } from '@/lib/utils'
-import type { TransportManifest } from '@/types'
+import { useState, useMemo } from 'react';
+import {
+  Truck, FileText, Check, Download, Plus, X, ChevronDown, ChevronUp,
+  Calendar as CalendarIcon, ClipboardList, Send, CheckCircle, Clock,
+} from 'lucide-react';
+import { useStore } from '@/store/useStore';
+import { cn } from '@/lib/utils';
+import type { TransportManifest } from '@/types';
 
-const receivingUnits = ['建材公司', '焚烧发电厂', '水泥厂', '砖厂']
-const plateNumbers = ['苏B·12345', '苏B·23456', '苏B·34567', '苏B·45678', '苏B·56789']
+type Tab = 'records' | 'manifests';
+type ManifestStatus = 'pending' | 'approved' | 'shipped';
 
-const statusConfig = {
-  pending: { label: '待审批', badge: 'badge-warning' },
-  approved: { label: '已审批', badge: 'badge-info' },
-  shipped: { label: '已外运', badge: 'badge-success' },
-} as const
+const statusMap: Record<ManifestStatus, { label: string; cls: string }> = {
+  pending: { label: '待审批', cls: 'badge-warning' },
+  approved: { label: '已审批', cls: 'badge-info' },
+  shipped: { label: '已外运', cls: 'badge-success' },
+};
 
-function generateManifestNo() {
-  const now = new Date()
-  const date = now.getFullYear().toString() +
-    String(now.getMonth() + 1).padStart(2, '0') +
-    String(now.getDate()).padStart(2, '0')
-  const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')
-  return `LD-${date}-${seq}`
-}
+const units = ['建材公司', '焚烧发电厂', '水泥厂', '砖厂'];
+const plates = ['粤A12345', '粤A67890', '粤B11111', '粤B22222', '粤C33333'];
+const operators = ['张三', '李四', '王五', '赵六', '钱七'];
 
-function fmtTime(t?: string) {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN')
+const fmtTime = (t?: string) => t ? new Date(t).toLocaleString('zh-CN') : '-';
+const fmtDate = (t?: string) => t ? new Date(t).toLocaleDateString('zh-CN') : '-';
+
+const genId = () => Math.random().toString(36).slice(2, 10);
+
+function exportCSV(manifests: TransportManifest[], monthLabel: string) {
+  const header = ['联单号', '接收单位', '车牌号', '干污泥重量(吨)', '创建时间', '审批时间', '外运时间', '操作员'];
+  const rows = manifests.map((m) => [
+    m.manifestNo,
+    m.receivingUnit,
+    m.plateNumber,
+    String(m.drySludgeWeight),
+    fmtTime(m.createTime),
+    fmtTime(m.approvedTime),
+    fmtTime(m.shippedTime),
+    m.operator,
+  ]);
+  const csv = '\ufeff' + [header, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `外运台账明细_${monthLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function Timeline({ manifest }: { manifest: TransportManifest }) {
-  const steps = [
-    { key: 'create', label: '创建联单', time: manifest.createTime, icon: <FileText className="w-3.5 h-3.5" />, done: true },
-    { key: 'approve', label: '审批通过', time: manifest.approvedTime, icon: <Check className="w-3.5 h-3.5" />, done: manifest.status !== 'pending' },
-    { key: 'ship', label: '确认外运', time: manifest.shippedTime, icon: <Truck className="w-3.5 h-3.5" />, done: manifest.status === 'shipped' },
-  ]
+  const items = [
+    {
+      label: '创建联单',
+      icon: <ClipboardList className="w-3.5 h-3.5" />,
+      time: manifest.createTime,
+      done: true,
+    },
+    {
+      label: '审批通过',
+      icon: <CheckCircle className="w-3.5 h-3.5" />,
+      time: manifest.approvedTime,
+      done: manifest.status !== 'pending',
+    },
+    {
+      label: '确认外运',
+      icon: <Truck className="w-3.5 h-3.5" />,
+      time: manifest.shippedTime,
+      done: manifest.status === 'shipped',
+    },
+  ];
   return (
-    <div className="pt-3 border-t border-slate-100 space-y-2">
-      <p className="text-xs font-medium text-slate-500">流转时间线</p>
-      <ol className="relative border-l border-slate-200 ml-1.5 space-y-2.5 pl-4">
-        {steps.map((s) => (
-          <li key={s.key} className="relative">
+    <div className="space-y-2">
+      {items.map((it, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <div className="flex flex-col items-center">
             <div className={cn(
-              'absolute -left-[22px] top-0.5 w-6 h-6 rounded-full flex items-center justify-center',
-              s.done ? 'bg-primary-600 text-white' : 'bg-slate-200 text-slate-400'
+              'w-7 h-7 rounded-full flex items-center justify-center border-2 shrink-0',
+              it.done
+                ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                : 'bg-gray-100 border-gray-300 text-gray-400'
             )}>
-              {s.icon}
+              {it.icon}
             </div>
-            <div className="flex items-center justify-between">
-              <p className={cn('text-xs font-medium', s.done ? 'text-slate-800' : 'text-slate-400')}>
-                {s.label}
-                {s.done && <CheckCircle2 className="w-3 h-3 inline ml-1 text-emerald-500" />}
+            {i < items.length - 1 && (
+              <div className={cn('w-0.5 flex-1 min-h-4', it.done ? 'bg-emerald-300' : 'bg-gray-200')} />
+            )}
+          </div>
+          <div className="flex-1 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className={cn('text-sm font-medium', it.done ? 'text-slate-800' : 'text-slate-400')}>
+                {it.label}
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">{fmtTime(it.time)}</span>
+            </div>
+            {it.done && (
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                操作员：{operators[i % operators.length]}
               </p>
-              <p className="text-[10px] text-slate-400 font-mono">{fmtTime(s.time)}</p>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">操作员: {manifest.operator}</p>
-          </li>
-        ))}
-      </ol>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
-  )
+  );
+}
+
+function ManifestCard({
+  m, onApprove, onShip, expanded, onToggle,
+}: {
+  m: TransportManifest;
+  onApprove: (id: string) => void;
+  onShip: (id: string) => void;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="card">
+      <div
+        className="card-header flex items-center justify-between cursor-pointer"
+        onClick={() => onToggle(m.id)}
+      >
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-teal-600" />
+          <span className="font-semibold">{m.manifestNo}</span>
+          <span className={cn(statusMap[m.status].cls, 'text-xs')}>{statusMap[m.status].label}</span>
+        </div>
+        {expanded
+          ? <ChevronUp className="w-4 h-4 text-slate-400" />
+          : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </div>
+      <div className="card-body space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div>
+            <p className="text-[11px] text-gray-500">接收单位</p>
+            <p className="font-medium">{m.receivingUnit}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500">车牌号</p>
+            <p className="font-mono">{m.plateNumber}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500">干污泥重量</p>
+            <p className="font-bold text-teal-700">{m.drySludgeWeight} 吨</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500">创建时间</p>
+            <p className="text-xs text-slate-600">{fmtTime(m.createTime)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500">审批时间</p>
+            <p className="text-xs text-slate-600">{m.approvedTime ? fmtTime(m.approvedTime) : '-'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500">外运时间</p>
+            <p className="text-xs text-emerald-700 font-medium">{m.shippedTime ? fmtTime(m.shippedTime) : '-'}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {m.status === 'pending' && (
+            <button onClick={() => onApprove(m.id)} className="btn-primary px-3 py-1.5 rounded text-xs flex items-center gap-1">
+              <Check className="w-3 h-3" />审批通过
+            </button>
+          )}
+          {m.status === 'approved' && (
+            <button onClick={() => onShip(m.id)} className="btn-primary px-3 py-1.5 rounded text-xs flex items-center gap-1">
+              <Send className="w-3 h-3" />确认外运
+            </button>
+          )}
+        </div>
+
+        {expanded && (
+          <div className="pt-3 border-t border-slate-100">
+            <p className="text-[11px] font-semibold text-slate-600 mb-2">流转时间线</p>
+            <Timeline manifest={m} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function Transport() {
-  const { transportManifests, addTransportManifest, updateManifestStatus } = useStore()
-  const [activeTab, setActiveTab] = useState<'manifest' | 'records'>('manifest')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('manifests');
+  const [expandedManifest, setExpandedManifest] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
 
-  const [receivingUnit, setReceivingUnit] = useState(receivingUnits[0])
-  const [plateNumber, setPlateNumber] = useState(plateNumbers[0])
-  const [drySludgeWeight, setDrySludgeWeight] = useState('')
-  const [operator, setOperator] = useState('')
+  const [newManifest, setNewManifest] = useState({
+    receivingUnit: units[0],
+    plateNumber: plates[0],
+    drySludgeWeight: '10',
+  });
 
-  const [searchUnit, setSearchUnit] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const { transportManifests, addTransportManifest, updateManifestStatus } = useStore();
 
-  const handleSubmit = () => {
-    if (!drySludgeWeight || !operator) return
+  const [recordsDateFrom, setRecordsDateFrom] = useState<string>('');
+  const [recordsDateTo, setRecordsDateTo] = useState<string>('');
+  const [monthFilter, setMonthFilter] = useState<string>('');
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of transportManifests) {
+      if (m.status === 'shipped' && m.shippedTime) set.add(m.shippedTime.slice(0, 7));
+      if (m.createTime) set.add(m.createTime.slice(0, 7));
+    }
+    return Array.from(set).sort().reverse();
+  }, [transportManifests]);
+
+  const shippedRecords = useMemo(() => {
+    let arr = transportManifests
+      .filter((m) => m.status === 'shipped' && m.shippedTime)
+      .slice()
+      .sort((a, b) => new Date(b.shippedTime!).getTime() - new Date(a.shippedTime!).getTime());
+    if (monthFilter) {
+      arr = arr.filter((m) => m.shippedTime!.slice(0, 7) === monthFilter);
+    }
+    if (recordsDateFrom) {
+      arr = arr.filter((m) => m.shippedTime!.slice(0, 10) >= recordsDateFrom);
+    }
+    if (recordsDateTo) {
+      arr = arr.filter((m) => m.shippedTime!.slice(0, 10) <= recordsDateTo);
+    }
+    return arr;
+  }, [transportManifests, recordsDateFrom, recordsDateTo, monthFilter]);
+
+  const pendingManifests = transportManifests.filter((m) => m.status === 'pending');
+  const approvedManifests = transportManifests.filter((m) => m.status === 'approved');
+  const shippedManifests = transportManifests.filter((m) => m.status === 'shipped');
+
+  const shippedTotalWeight = shippedRecords.reduce((s, m) => s + m.drySludgeWeight, 0);
+
+  const handleAdd = () => {
+    if (!newManifest.drySludgeWeight) return;
+    const now = new Date().toISOString();
     addTransportManifest({
-      manifestNo: generateManifestNo(),
-      receivingUnit,
-      plateNumber,
-      drySludgeWeight: parseFloat(drySludgeWeight),
+      manifestNo: `LD-${now.slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 900) + 100)}`,
+      receivingUnit: newManifest.receivingUnit,
+      plateNumber: newManifest.plateNumber,
+      drySludgeWeight: Number(newManifest.drySludgeWeight),
       status: 'pending',
-      operator,
-      createTime: new Date().toISOString(),
-    })
-    setDrySludgeWeight('')
-    setOperator('')
-  }
+      operator: operators[Math.floor(Math.random() * operators.length)],
+      createTime: now,
+    });
+    setShowAdd(false);
+    setNewManifest({ receivingUnit: units[0], plateNumber: plates[0], drySludgeWeight: '10' });
+  };
 
-  const shippedRecords = transportManifests.filter((m) => m.status === 'shipped' && m.shippedTime)
-
-  const filteredShipped = shippedRecords.filter((m) => {
-    if (!m.shippedTime) return false
-    const day = m.shippedTime.slice(0, 10)
-    if (searchUnit && !m.receivingUnit.includes(searchUnit)) return false
-    if (dateFrom && day < dateFrom) return false
-    if (dateTo && day > dateTo) return false
-    return true
-  }).sort((a, b) => (b.shippedTime || '').localeCompare(a.shippedTime || ''))
-
-  const totalWeight = filteredShipped.reduce((s, m) => s + m.drySludgeWeight, 0)
+  const filterLabel = monthFilter
+    ? `${monthFilter.slice(0, 4)}年${parseInt(monthFilter.slice(5, 7), 10)}月`
+    : (recordsDateFrom || recordsDateTo ? '筛选区间' : '全部');
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
+    <div className="space-y-4 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">出泥外运</h1>
-          <p className="text-sm text-slate-500 mt-1">联单管理与外运记录</p>
+        <div className="flex items-center gap-2">
+          <Truck className="w-6 h-6 text-teal-600" />
+          <h1 className="text-xl font-bold">出泥外运</h1>
         </div>
-        <Truck className="w-6 h-6 text-emerald-600" />
-      </div>
-
-      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-        <button
-          className={cn(
-            'px-4 py-2 rounded-md text-sm font-medium transition-all',
-            activeTab === 'manifest'
-              ? 'bg-white text-primary-700 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
-          )}
-          onClick={() => setActiveTab('manifest')}
-        >
-          <FileText className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-          联单管理
-        </button>
-        <button
-          className={cn(
-            'px-4 py-2 rounded-md text-sm font-medium transition-all',
-            activeTab === 'records'
-              ? 'bg-white text-primary-700 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
-          )}
-          onClick={() => setActiveTab('records')}
-        >
-          <Truck className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-          外运记录
+        <button onClick={() => setShowAdd(true)} className="btn-primary px-3 py-1.5 rounded text-sm flex items-center gap-1">
+          <Plus className="w-4 h-4" />新建联单
         </button>
       </div>
 
-      {activeTab === 'manifest' && (
-        <div className="space-y-6">
-          <div className="card">
-            <div className="card-header">
-              <h3 className="text-sm font-semibold text-slate-700">新建联单</h3>
-            </div>
-            <div className="card-body">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">接收单位</label>
-                  <select
-                    className="select-field"
-                    value={receivingUnit}
-                    onChange={(e) => setReceivingUnit(e.target.value)}
-                  >
-                    {receivingUnits.map((u) => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">车牌号</label>
-                  <select
-                    className="select-field"
-                    value={plateNumber}
-                    onChange={(e) => setPlateNumber(e.target.value)}
-                  >
-                    {plateNumbers.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">干泥重量(吨)</label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    placeholder="输入重量"
-                    value={drySludgeWeight}
-                    onChange={(e) => setDrySludgeWeight(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">操作员</label>
-                  <input
-                    type="text"
-                    className="input-field"
-                    placeholder="操作员姓名"
-                    value={operator}
-                    onChange={(e) => setOperator(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <button className="btn-primary w-full" onClick={handleSubmit}>
-                    <Plus className="w-4 h-4 inline mr-1 -mt-0.5" />
-                    创建联单
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="flex gap-1 border-b border-gray-200 flex-wrap">
+        <button
+          onClick={() => setTab('manifests')}
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors',
+            tab === 'manifests'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+        >
+          <FileText className="w-4 h-4" />联单管理
+        </button>
+        <button
+          onClick={() => setTab('records')}
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors',
+            tab === 'records'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+        >
+          <ClipboardList className="w-4 h-4" />外运记录
+        </button>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {transportManifests.map((m) => {
-              const cfg = statusConfig[m.status]
-              const expanded = expandedId === m.id
-              return (
-                <div key={m.id} className="card">
-                  <div className="card-body space-y-3">
-                    <div
-                      className="flex items-center justify-between cursor-pointer"
-                      onClick={() => setExpandedId(expanded ? null : m.id)}
-                    >
-                      <span className="text-sm font-bold text-slate-800">{m.manifestNo}</span>
-                      <div className="flex items-center gap-2">
-                        <span className={cfg.badge}>{cfg.label}</span>
-                        {expanded
-                          ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                          : <ChevronDown className="w-4 h-4 text-slate-400" />}
-                      </div>
+      {tab === 'manifests' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: '待审批', value: pendingManifests.length, color: 'text-amber-700', icon: <Clock className="w-5 h-5 text-amber-600" /> },
+              { label: '已审批待外运', value: approvedManifests.length, color: 'text-teal-700', icon: <Check className="w-5 h-5 text-teal-600" /> },
+              { label: '已外运', value: shippedManifests.length, color: 'text-emerald-700', icon: <Truck className="w-5 h-5 text-emerald-600" /> },
+            ].map((card) => (
+              <div key={card.label} className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="stat-label text-xs text-gray-500">{card.label}</p>
+                      <p className={cn('stat-value text-2xl font-bold', card.color)}>{card.value}</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
-                      <div>接收单位: <span className="font-medium text-slate-800">{m.receivingUnit}</span></div>
-                      <div>车牌号: <span className="font-medium text-slate-800">{m.plateNumber}</span></div>
-                      <div>干泥重量: <span className="font-medium text-slate-800">{m.drySludgeWeight} 吨</span></div>
-                      <div>操作员: <span className="font-medium text-slate-800">{m.operator}</span></div>
-                    </div>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      创建: {fmtTime(m.createTime)}
-                    </div>
-
-                    {expanded && <Timeline manifest={m} />}
-
-                    <div className="flex gap-2 pt-1">
-                      {m.status === 'pending' && (
-                        <button
-                          className="btn-primary text-xs flex-1"
-                          onClick={() => updateManifestStatus(m.id, 'approved')}
-                        >
-                          <Check className="w-3 h-3 inline mr-1" />
-                          审批通过
-                        </button>
-                      )}
-                      {m.status === 'approved' && (
-                        <button
-                          className="btn-secondary text-xs flex-1"
-                          onClick={() => updateManifestStatus(m.id, 'shipped')}
-                        >
-                          <Send className="w-3 h-3 inline mr-1" />
-                          确认外运
-                        </button>
-                      )}
-                      {m.status === 'shipped' && (
-                        <span className="text-xs text-emerald-600 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          已完成 · 外运时间 {fmtTime(m.shippedTime)}
-                        </span>
-                      )}
-                    </div>
+                    {card.icon}
                   </div>
                 </div>
-              )
-            })}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {transportManifests.map((m) => (
+              <ManifestCard
+                key={m.id}
+                m={m}
+                onApprove={(id) => updateManifestStatus(id, 'approved')}
+                onShip={(id) => updateManifestStatus(id, 'shipped')}
+                expanded={expandedManifest === m.id}
+                onToggle={(id) => setExpandedManifest(expandedManifest === id ? null : id)}
+              />
+            ))}
           </div>
         </div>
       )}
 
-      {activeTab === 'records' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="card">
-              <div className="card-body text-center">
-                <p className="stat-label">外运总重量</p>
-                <p className="stat-value text-emerald-600">{totalWeight.toFixed(1)}<span className="text-sm font-normal text-slate-400 ml-1">吨</span></p>
+      {tab === 'records' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="card-body space-y-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="text-[11px] text-slate-500 mb-1 block">按月份快速筛选</label>
+                  <select
+                    value={monthFilter}
+                    onChange={(e) => {
+                      setMonthFilter(e.target.value);
+                      setRecordsDateFrom('');
+                      setRecordsDateTo('');
+                    }}
+                    className="input-field w-40"
+                  >
+                    <option value="">全部月份</option>
+                    {availableMonths.map((m) => (
+                      <option key={m} value={m}>
+                        {m.slice(0, 4)}年{parseInt(m.slice(5, 7), 10)}月
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-500 mb-1 block">外运开始日期</label>
+                  <input
+                    type="date"
+                    value={recordsDateFrom}
+                    onChange={(e) => {
+                      setRecordsDateFrom(e.target.value);
+                      setMonthFilter('');
+                    }}
+                    className="input-field w-40"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-500 mb-1 block">外运结束日期</label>
+                  <input
+                    type="date"
+                    value={recordsDateTo}
+                    onChange={(e) => {
+                      setRecordsDateTo(e.target.value);
+                      setMonthFilter('');
+                    }}
+                    className="input-field w-40"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    setMonthFilter('');
+                    setRecordsDateFrom('');
+                    setRecordsDateTo('');
+                  }}
+                  className="btn-secondary px-3 py-1.5 rounded text-xs"
+                >
+                  清除筛选
+                </button>
+                <div className="flex-1" />
+                <button
+                  onClick={() => exportCSV(shippedRecords, filterLabel)}
+                  disabled={shippedRecords.length === 0}
+                  className={cn(
+                    'px-3 py-1.5 rounded text-xs flex items-center gap-1',
+                    shippedRecords.length === 0 ? 'btn-secondary opacity-50 cursor-not-allowed' : 'btn-primary'
+                  )}
+                >
+                  <Download className="w-3.5 h-3.5" />导出台账明细（{shippedRecords.length}条）
+                </button>
               </div>
-            </div>
-            <div className="card">
-              <div className="card-body text-center">
-                <p className="stat-label">外运总车次</p>
-                <p className="stat-value text-primary-600">{filteredShipped.length}<span className="text-sm font-normal text-slate-400 ml-1">次</span></p>
+              <div className="flex flex-wrap gap-4 pt-1 text-xs text-slate-600">
+                <p>
+                  <CalendarIcon className="w-3.5 h-3.5 inline -mt-0.5 mr-1 text-teal-600" />
+                  筛选范围：<span className="font-medium">{filterLabel}</span>
+                </p>
+                <p>
+                  <Truck className="w-3.5 h-3.5 inline -mt-0.5 mr-1 text-emerald-600" />
+                  外运车次：<span className="font-bold">{shippedRecords.length}</span> 车
+                </p>
+                <p>
+                  <CheckCircle className="w-3.5 h-3.5 inline -mt-0.5 mr-1 text-amber-600" />
+                  总重量：<span className="font-bold text-emerald-700">{shippedTotalWeight.toFixed(1)}</span> 吨
+                </p>
               </div>
             </div>
           </div>
 
           <div className="card">
-            <div className="card-header flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700">外运记录查询（按外运日期）</h3>
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                按确认外运时间归档
-              </span>
+            <div className="card-header font-semibold flex items-center justify-between">
+              <span>外运记录（按确认外运时间排序）</span>
             </div>
-            <div className="card-body">
-              <div className="flex flex-wrap gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <Search className="w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    className="input-field"
-                    placeholder="接收单位"
-                    value={searchUnit}
-                    onChange={(e) => setSearchUnit(e.target.value)}
-                  />
-                </div>
-                <input
-                  type="date"
-                  className="input-field"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                />
-                <span className="text-slate-400 self-center">至</span>
-                <input
-                  type="date"
-                  className="input-field"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                />
-              </div>
-
-              <div className="overflow-x-auto">
+            <div className="card-body overflow-x-auto">
+              {shippedRecords.length === 0 ? (
+                <p className="text-center text-sm text-slate-400 py-8">暂无外运记录</p>
+              ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="table-header text-left">联单号</th>
-                      <th className="table-header text-left">接收单位</th>
-                      <th className="table-header text-left">车牌号</th>
-                      <th className="table-header text-right">干泥重量(吨)</th>
-                      <th className="table-header text-left">外运时间</th>
-                      <th className="table-header text-left">操作员</th>
+                    <tr className="table-header border-b">
+                      <th className="table-cell text-left py-2 px-3">联单号</th>
+                      <th className="table-cell text-left py-2 px-3">接收单位</th>
+                      <th className="table-cell text-left py-2 px-3">车牌号</th>
+                      <th className="table-cell text-right py-2 px-3">重量(吨)</th>
+                      <th className="table-cell text-left py-2 px-3">外运时间</th>
+                      <th className="table-cell text-left py-2 px-3">操作员</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredShipped.map((m) => (
-                      <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                        <td className="table-cell font-medium text-slate-800">{m.manifestNo}</td>
-                        <td className="table-cell">{m.receivingUnit}</td>
-                        <td className="table-cell">{m.plateNumber}</td>
-                        <td className="table-cell text-right font-medium">{m.drySludgeWeight}</td>
-                        <td className="table-cell text-slate-600">
+                    {shippedRecords.map((m) => (
+                      <tr key={m.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="table-cell py-2 px-3 font-mono text-xs">{m.manifestNo}</td>
+                        <td className="table-cell py-2 px-3">{m.receivingUnit}</td>
+                        <td className="table-cell py-2 px-3 font-mono">{m.plateNumber}</td>
+                        <td className="table-cell py-2 px-3 text-right font-bold text-emerald-700">{m.drySludgeWeight}</td>
+                        <td className="table-cell py-2 px-3 text-slate-600 text-xs">
+                          <Clock className="w-3 h-3 inline -mt-0.5 mr-1 text-slate-400" />
                           {fmtTime(m.shippedTime)}
                         </td>
-                        <td className="table-cell">{m.operator}</td>
+                        <td className="table-cell py-2 px-3">{m.operator}</td>
                       </tr>
                     ))}
-                    {filteredShipped.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">暂无外运记录</td>
-                      </tr>
-                    )}
                   </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 font-semibold">
+                      <td className="table-cell py-2 px-3" colSpan={3}>合计</td>
+                      <td className="table-cell py-2 px-3 text-right text-emerald-700">{shippedTotalWeight.toFixed(1)}</td>
+                      <td className="table-cell py-2 px-3" colSpan={2}>{shippedRecords.length} 车次</td>
+                    </tr>
+                  </tfoot>
                 </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">新建外运联单</h3>
+              <button onClick={() => setShowAdd(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">接收单位</label>
+                <select
+                  value={newManifest.receivingUnit}
+                  onChange={(e) => setNewManifest({ ...newManifest, receivingUnit: e.target.value })}
+                  className="input-field w-full"
+                >
+                  {units.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
               </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">车牌号</label>
+                <select
+                  value={newManifest.plateNumber}
+                  onChange={(e) => setNewManifest({ ...newManifest, plateNumber: e.target.value })}
+                  className="input-field w-full"
+                >
+                  {plates.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">干污泥重量(吨)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={newManifest.drySludgeWeight}
+                  onChange={(e) => setNewManifest({ ...newManifest, drySludgeWeight: e.target.value })}
+                  className="input-field w-full"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5 justify-end">
+              <button onClick={() => setShowAdd(false)} className="btn-secondary px-4 py-2 rounded text-sm">取消</button>
+              <button onClick={handleAdd} className="btn-primary px-4 py-2 rounded text-sm">创建联单</button>
             </div>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -168,6 +168,26 @@ export const useStore = create<SludgeStore>()(
       merge: (persistedState, currentState) => {
         if (!persistedState || typeof persistedState !== 'object') return currentState
         const merged = { ...currentState, ...persistedState } as SludgeStore
+        if (Array.isArray(merged.transportManifests)) {
+          merged.transportManifests = merged.transportManifests.map((m) => {
+            const createDate = new Date(m.createTime).getTime()
+            const approvedTime = m.approvedTime && m.status !== 'pending'
+              ? m.approvedTime
+              : (m.status !== 'pending' ? new Date(createDate + 3 * 3600_000).toISOString() : undefined)
+            const shippedTime = m.shippedTime && m.status === 'shipped'
+              ? m.shippedTime
+              : (m.status === 'shipped' ? new Date(createDate + 8 * 3600_000).toISOString() : undefined)
+            return { ...m, approvedTime, shippedTime }
+          })
+        }
+        if (Array.isArray(merged.uploadTasks)) {
+          merged.uploadTasks = merged.uploadTasks.map((t) => ({
+            ...t,
+            month: t.month || (t.taskName.match(/(\d{4})年(\d{1,2})月/)
+              ? `${t.taskName.match(/(\d{4})年/)[1]}-${String(parseInt(t.taskName.match(/(\d{1,2})月/)[1], 10)).padStart(2, '0')}`
+              : new Date().toISOString().slice(0, 7)),
+          }))
+        }
         return merged
       },
     }
