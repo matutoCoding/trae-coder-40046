@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type {
   WeighingRecord,
   MoistureTest,
@@ -69,67 +70,87 @@ const initialWeighing = generateWeighingRecords()
 const initialMoisture = generateMoistureTests(initialWeighing)
 const initialSheds = generateStorageSheds()
 
-export const useStore = create<SludgeStore>((set) => ({
-  weighingRecords: initialWeighing,
-  moistureTests: initialMoisture,
-  storageSheds: initialSheds,
-  turnRecords: generateTurnRecords(initialSheds),
-  conditioningRecords: generateConditioningRecords(),
-  filterPressRecords: generateFilterPressRecords(),
-  thermalDryingRecords: generateThermalDryingRecords(),
-  lowTempDryingRecords: generateLowTempDryingRecords(),
-  deodorizationRecords: generateDeodorizationRecords(),
-  transportManifests: generateTransportManifests(),
-  dailyStatistics: generateDailyStatistics(),
-  alerts: generateAlerts(),
-  uploadTasks: generateUploadTasks(),
-  tempCurveData: generateTempCurveData(),
+export const useStore = create<SludgeStore>()(
+  persist(
+    (set) => ({
+      weighingRecords: initialWeighing,
+      moistureTests: initialMoisture,
+      storageSheds: initialSheds,
+      turnRecords: generateTurnRecords(initialSheds),
+      conditioningRecords: generateConditioningRecords(),
+      filterPressRecords: generateFilterPressRecords(),
+      thermalDryingRecords: generateThermalDryingRecords(),
+      lowTempDryingRecords: generateLowTempDryingRecords(),
+      deodorizationRecords: generateDeodorizationRecords(),
+      transportManifests: generateTransportManifests(),
+      dailyStatistics: generateDailyStatistics(),
+      alerts: generateAlerts(),
+      uploadTasks: generateUploadTasks(),
+      tempCurveData: generateTempCurveData(),
 
-  addWeighingRecord: (record) =>
-    set((s) => ({ weighingRecords: [{ ...record, id: genId() }, ...s.weighingRecords] })),
+      addWeighingRecord: (record) =>
+        set((s) => ({ weighingRecords: [{ ...record, id: genId() }, ...s.weighingRecords] })),
 
-  addMoistureTest: (test) =>
-    set((s) => ({ moistureTests: [{ ...test, id: genId() }, ...s.moistureTests] })),
+      addMoistureTest: (test) =>
+        set((s) => ({ moistureTests: [{ ...test, id: genId() }, ...s.moistureTests] })),
 
-  addTurnRecord: (record) =>
-    set((s) => ({ turnRecords: [{ ...record, id: genId() }, ...s.turnRecords] })),
+      addTurnRecord: (record) =>
+        set((s) => ({ turnRecords: [{ ...record, id: genId() }, ...s.turnRecords] })),
 
-  addConditioningRecord: (record) =>
-    set((s) => ({ conditioningRecords: [{ ...record, id: genId() }, ...s.conditioningRecords] })),
+      addConditioningRecord: (record) =>
+        set((s) => ({ conditioningRecords: [{ ...record, id: genId() }, ...s.conditioningRecords] })),
 
-  addFilterPressRecord: (record) =>
-    set((s) => ({ filterPressRecords: [{ ...record, id: genId() }, ...s.filterPressRecords] })),
+      addFilterPressRecord: (record) =>
+        set((s) => ({ filterPressRecords: [{ ...record, id: genId() }, ...s.filterPressRecords] })),
 
-  addThermalDryingRecord: (record) =>
-    set((s) => ({ thermalDryingRecords: [{ ...record, id: genId() }, ...s.thermalDryingRecords] })),
+      addThermalDryingRecord: (record) =>
+        set((s) => ({ thermalDryingRecords: [{ ...record, id: genId() }, ...s.thermalDryingRecords] })),
 
-  addLowTempDryingRecord: (record) =>
-    set((s) => ({ lowTempDryingRecords: [{ ...record, id: genId() }, ...s.lowTempDryingRecords] })),
+      addLowTempDryingRecord: (record) =>
+        set((s) => ({ lowTempDryingRecords: [{ ...record, id: genId() }, ...s.lowTempDryingRecords] })),
 
-  addDeodorizationRecord: (record) =>
-    set((s) => ({ deodorizationRecords: [{ ...record, id: genId() }, ...s.deodorizationRecords] })),
+      addDeodorizationRecord: (record) =>
+        set((s) => ({ deodorizationRecords: [{ ...record, id: genId() }, ...s.deodorizationRecords] })),
 
-  addTransportManifest: (manifest) =>
-    set((s) => ({ transportManifests: [{ ...manifest, id: genId() }, ...s.transportManifests] })),
+      addTransportManifest: (manifest) =>
+        set((s) => ({ transportManifests: [{ ...manifest, id: genId() }, ...s.transportManifests] })),
 
-  updateManifestStatus: (id, status) =>
-    set((s) => ({
-      transportManifests: s.transportManifests.map((m) =>
-        m.id === id ? { ...m, status } : m
-      ),
-    })),
+      updateManifestStatus: (id, status) =>
+        set((s) => ({
+          transportManifests: s.transportManifests.map((m) =>
+            m.id === id ? { ...m, status } : m
+          ),
+        })),
 
-  updateUploadTaskStatus: (id, status) =>
-    set((s) => ({
-      uploadTasks: s.uploadTasks.map((t) =>
-        t.id === id ? { ...t, status, uploadTime: status === 'uploaded' ? new Date().toISOString() : t.uploadTime } : t
-      ),
-    })),
+      updateUploadTaskStatus: (id, status) =>
+        set((s) => ({
+          uploadTasks: s.uploadTasks.map((t) =>
+            t.id === id ? { ...t, status, uploadTime: status === 'uploaded' ? new Date().toISOString() : t.uploadTime } : t
+          ),
+        })),
 
-  updateShed: (id, data) =>
-    set((s) => ({
-      storageSheds: s.storageSheds.map((sh) =>
-        sh.id === id ? { ...sh, ...data } : sh
-      ),
-    })),
-}))
+      updateShed: (id, data) =>
+        set((s) => ({
+          storageSheds: s.storageSheds.map((sh) =>
+            sh.id === id ? { ...sh, ...data } : sh
+          ),
+        })),
+    }),
+    {
+      name: 'sludge-management-store',
+      partialize: (state) => ({
+        weighingRecords: state.weighingRecords,
+        moistureTests: state.moistureTests,
+        storageSheds: state.storageSheds,
+        turnRecords: state.turnRecords,
+        conditioningRecords: state.conditioningRecords,
+        filterPressRecords: state.filterPressRecords,
+        thermalDryingRecords: state.thermalDryingRecords,
+        lowTempDryingRecords: state.lowTempDryingRecords,
+        deodorizationRecords: state.deodorizationRecords,
+        transportManifests: state.transportManifests,
+        uploadTasks: state.uploadTasks,
+      }),
+    }
+  )
+)

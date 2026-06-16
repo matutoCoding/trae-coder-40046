@@ -17,7 +17,7 @@ export default function ThermalDrying() {
   const [activeTab, setActiveTab] = useState<'temp' | 'moisture'>('temp');
   const { thermalDryingRecords, tempCurveData, addThermalDryingRecord } = useStore();
 
-  const latest = thermalDryingRecords[thermalDryingRecords.length - 1];
+  const latest = thermalDryingRecords[0];
 
   const [form, setForm] = useState({
     batchNo: '',

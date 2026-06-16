@@ -46,6 +46,7 @@ export default function Weighing() {
 
   const handleSubmitWeighing = () => {
     if (!formPlate || !formGross || !formTare || netWeight <= 0) return;
+    const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     addWeighingRecord({
       plateNumber: formPlate,
       grossWeight: Number(formGross),
@@ -60,6 +61,8 @@ export default function Weighing() {
     setFormGross('');
     setFormTare('');
     setFormDriver('');
+    setTestWeighingId(newId);
+    setActiveTab('moisture');
   };
 
   const handleSubmitMoisture = () => {
@@ -88,7 +91,7 @@ export default function Weighing() {
   const totalPages = Math.ceil(filteredRecords.length / 10);
   const paginatedRecords = filteredRecords.slice((currentPage - 1) * 10, currentPage * 10);
 
-  const recentRecords = weighingRecords.slice(-5).reverse();
+  const recentRecords = weighingRecords.slice(0, 5);
 
   const renderRegister = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -179,7 +182,7 @@ export default function Weighing() {
             <label className="stat-label">关联过磅记录</label>
             <select className="select-field w-full" value={testWeighingId} onChange={(e) => setTestWeighingId(e.target.value)}>
               <option value="">请选择</option>
-              {weighingRecords.slice(-20).reverse().map((r) => (
+              {weighingRecords.slice(0, 20).map((r) => (
                 <option key={r.id} value={r.id}>{r.plateNumber} - {r.netWeight.toFixed(2)}吨</option>
               ))}
             </select>

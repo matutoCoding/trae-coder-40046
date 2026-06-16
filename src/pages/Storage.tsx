@@ -26,7 +26,7 @@ function getCapacityColor(ratio: number) {
 
 export default function Storage() {
   const [activeTab, setActiveTab] = useState<TabKey>('inventory')
-  const { storageSheds, turnRecords, addTurnRecord } = useStore()
+  const { storageSheds, turnRecords, addTurnRecord, updateShed } = useStore()
 
   const [shedId, setShedId] = useState('')
   const [area, setArea] = useState(areas[0])
@@ -37,14 +37,19 @@ export default function Storage() {
   const handleSubmit = () => {
     const shed = storageSheds.find((s) => s.id === shedId)
     if (!shed || !operator || !beforeMoisture || !afterMoisture) return
+    const now = new Date().toISOString()
     addTurnRecord({
       shedId: shed.id,
       shedName: shed.name,
-      turnTime: new Date().toISOString(),
+      turnTime: now,
       area,
       operator,
       beforeMoisture: Number(beforeMoisture),
       afterMoisture: Number(afterMoisture),
+    })
+    updateShed(shed.id, {
+      lastTurnTime: now,
+      moistureRate: Number(afterMoisture),
     })
     setShedId('')
     setArea(areas[0])
